@@ -1,0 +1,4 @@
+Neural-Inference is the core of this engine.
+Hadoop manages the distributed nodes.
+Java is the language of the engine.
+Neural-Inference provides the final results.
