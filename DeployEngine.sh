@@ -1,32 +1,48 @@
 #!/bin/bash
-# Neural-Inference Engine: Advanced Deployment & Health Protocol
 
-echo "------------------------------------------------"
-echo "Initializing Neural-Inference Infrastructure..."
-echo "------------------------------------------------"
 
-# 1. Node Diagnostics
-echo "[CHECK] Verifying HDFS Cluster Status..."
-jps | grep -E 'NameNode|DataNode|SecondaryNameNode'
-if [ $? -ne 0 ]; then
-    echo "[ALERT] Nodes not detected. Initializing start-dfs.sh..."
+PROJECT_NAME="Neural-Inference-Engine"
+INPUT_DIR="/Neural-Inference-Engine/Raw_Ingress"
+OUTPUT_DIR="/Neural-Inference-Engine/Inference_Output/Cycle_$(date +%Y%m%d_%H%M)"
+
+echo "----------------------------------------------------------------"
+echo " [SYSTEM] INITIALIZING $PROJECT_NAME ARCHITECTURE "
+echo "----------------------------------------------------------------"
+
+# 1. NODE DIAGNOSTICS LAYER
+echo "[STEP 1/4] Performing Cluster Health Check..."
+NODE_COUNT=$(jps | grep -E 'NameNode|DataNode|SecondaryNameNode' | wc -l)
+
+if [ "$NODE_COUNT" -lt 3 ]; then
+    echo "[ALERT] Cluster Nodes Offline. Initiating Master/Slave boot sequence..."
     $HADOOP_HOME/sbin/start-dfs.sh
+    sleep 5
 else
-    echo "[SUCCESS] Distributed nodes are active."
+    echo "[SUCCESS] All $NODE_COUNT Distributed Nodes are Synchronized."
 fi
 
-# 2. Data Ingress Layer
-echo "[PROCESS] Purging old Inference Cache..."
-hadoop fs -rm -r /Neural-Inference-Engine/Inference_Output/Auto_Process 2>/dev/null
+# 2. DATA INGRESS LAYER (HDFS)
+echo "[STEP 2/4] Initializing HDFS Data Ingress..."
+hadoop fs -mkdir -p $INPUT_DIR
+hadoop fs -put -f records.txt $INPUT_DIR/
+echo "[SUCCESS] Linguistic records injected into Ingress Layer."
 
-echo "[PROCESS] Injecting New Linguistic Records..."
-hadoop fs -put records.txt /Neural-Inference-Engine/Raw_Ingress/
+# 3. COMPUTATION LAYER (MAPREDUCE)
+echo "[STEP 3/4] Executing Parallel Inference Cycle..."
+echo "[INFO] Mapping data fragments across virtualized nodes..."
 
-# 3. Execution Layer
-echo "[EXECUTE] Starting Parallel Inference Cycle..."
-hadoop jar /usr/local/hadoop/share/hadoop/mapreduce/hadoop-mapreduce-examples-3.4.1.jar wordcount /Neural-Inference-Engine/Raw_Ingress /Neural-Inference-Engine/Inference_Output/Auto_Process
+hadoop jar /usr/local/hadoop/share/hadoop/mapreduce/hadoop-mapreduce-examples-3.4.1.jar wordcount $INPUT_DIR $OUTPUT_DIR
 
-# 4. Final Validation
-echo "[SUCCESS] Neural-Inference Cycle Complete."
-echo "[RESULT] Accessing finalized Inference Report..."
-hadoop fs -cat /Neural-Inference-Engine/Inference_Output/Auto_Process/part-r-00000 | head -n 5
+# 4. POST-PROCESS VALIDATION
+if [ $? -eq 0 ]; then
+    echo "----------------------------------------------------------------"
+    echo " [SUCCESS] NEURAL-INFERENCE CYCLE COMPLETED SUCCESSFULLY "
+    echo "----------------------------------------------------------------"
+    echo "[REPORT] Accessing Top-5 Inference Results:"
+    hadoop fs -cat $OUTPUT_DIR/part-r-00000 | head -n 5
+else
+    echo "[ERROR] Inference Cycle Failure. Check HDFS Logs for details."
+    exit 1
+fi
+
+echo "[STATUS] Orchestrator shutting down. Grid remains active."
